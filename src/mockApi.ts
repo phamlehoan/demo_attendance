@@ -1,40 +1,45 @@
-import type { Employee } from './db';
+import type { Employee, AttendanceLog } from './db';
 
-// Dữ liệu nhân viên giả lập
-const MOCK_EMPLOYEES: Employee[] = [
-  {
-    employeeId: "EMP001",
-    firstName: "Anh",
-    lastName: "Nguyễn",
-    middleName: "Văn",
-    fullName: "Nguyễn Văn Anh",
-    email: "anh.nv@company.com",
-    pinCode: "11111"
+// Giả lập một số UUID chuẩn để bạn test
+const MOCK_DATA: Employee[] = [
+  { 
+    employeeId: '550e8400-e29b-41d4-a716-446655440000', 
+    fullName: 'Nguyễn Văn A', 
+    pin: '12345' 
   },
-  {
-    employeeId: "EMP002",
-    firstName: "Bình",
-    lastName: "Trần",
-    middleName: "Thị",
-    fullName: "Trần Thị Bình",
-    email: "binh.tt@company.com",
-    pinCode: "22222"
+  { 
+    employeeId: '6ba7b810-9dad-11d1-80b4-00c04fd430c8', 
+    fullName: 'Trần Thị B', 
+    pin: '67890' 
+  },
+  { 
+    employeeId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', 
+    fullName: 'Lê Văn C', 
+    pin: '55555' 
   }
 ];
 
 export const mockApi = {
-  // Giả lập GET /employees
+  /**
+   * Giả lập lấy danh sách nhân viên từ Server
+   */
   fetchEmployees: async (): Promise<Employee[]> => {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(MOCK_EMPLOYEES), 1500); // Giả lập lag 1.5s
-    });
+    console.log("📡 API: Đang tải danh sách nhân viên...");
+    // Giả lập độ trễ mạng 1.5 giây
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return MOCK_DATA;
   },
 
-  // Giả lập POST /sync-kiosk-attendance-logs
-  syncLogs: async (logs: any[]): Promise<{ success: boolean }> => {
-    console.log(">>> MOCK API: Đang nhận dữ liệu logs:", logs);
-    return new Promise((resolve) => {
-      setTimeout(() => resolve({ success: true }), 2000); // Giả lập lag 2s
-    });
+  /**
+   * Giả lập gửi logs chấm công (kèm ảnh base64) lên Server
+   */
+  syncLogs: async (logs: AttendanceLog[]): Promise<{ success: boolean }> => {
+    console.log("🚀 API: Đang đẩy dữ liệu chấm công lên Server...", logs);
+    
+    // Giả lập độ trễ mạng 2 giây (vì dữ liệu ảnh Base64 khá nặng)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Giả lập tỉ lệ thành công 100%
+    return { success: true };
   }
 };

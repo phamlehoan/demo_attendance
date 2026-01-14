@@ -1,24 +1,21 @@
-import { openDB, type DBSchema } from 'idb'; // Sửa DBSchema tại đây
+import { openDB } from 'idb';
+import type { DBSchema } from 'idb'; 
 
 export interface Employee {
-  employeeId: string;
-  firstName: string;
-  lastName: string;
-  middleName: string;
+  employeeId: string; 
   fullName: string;
-  email: string;
-  pinCode: string;
+  pin: string;
 }
 
-interface AttendanceLog {
-  id?: number;
+export interface AttendanceLog {
   employeeId: string;
   timestamp: number;
   type: 'IN' | 'OUT';
-  synced: number;
+  synced: number; 
+  photo: string | null; 
 }
 
-interface AttendanceDB extends DBSchema {
+interface MyDB extends DBSchema {
   employees: {
     key: string;
     value: Employee;
@@ -31,14 +28,14 @@ interface AttendanceDB extends DBSchema {
   };
 }
 
-export const dbPromise = openDB<AttendanceDB>('AttendanceDB', 1, {
+export const dbPromise = openDB<MyDB>('KioskDB', 1, {
   upgrade(db) {
     if (!db.objectStoreNames.contains('employees')) {
       const empStore = db.createObjectStore('employees', { keyPath: 'employeeId' });
-      empStore.createIndex('by-pin', 'pinCode');
+      empStore.createIndex('by-pin', 'pin');
     }
     if (!db.objectStoreNames.contains('logs')) {
-      const logStore = db.createObjectStore('logs', { keyPath: 'id', autoIncrement: true });
+      const logStore = db.createObjectStore('logs', { keyPath: 'timestamp' });
       logStore.createIndex('by-synced', 'synced');
     }
   },
