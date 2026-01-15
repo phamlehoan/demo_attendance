@@ -1,0 +1,26 @@
+// src/styles/global.scss
+$primary: #4f46e5;
+$success: #22c55e;
+$danger: #ef4444; // Lưu ý: dùng danger thay vì error để khớp giao diện cũ
+$warning: #f59e0b;
+$bg-dark: #121212;
+$card-dark: #1e1e1e; // Đảm bảo biến này tồn tại cho CameraModal
+
+@mixin scanline-animation {
+  position: absolute;
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 2px;
+  background: $success;
+  box-shadow: 0 0 15px $success;
+  animation: scan 3s linear infinite;
+}
+
+@keyframes scan { 
+  from { top: 0; } 
+  to { top: 100%; } 
+}
+
+// Reset cơ bản
+* { box-sizing: border-box; margin: 0; padding: 0; }
