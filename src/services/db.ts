@@ -1,19 +1,5 @@
 import { openDB, type DBSchema } from 'idb';
-
-export interface Employee {
-  employeeId: string;
-  fullName: string;
-  pin: string;
-}
-
-export interface AttendanceLog {
-  id: string; // Dùng UUID
-  employeeId: string;
-  timestamp: number;
-  type: 'IN' | 'OUT';
-  photo: string;
-  synced: number; 
-}
+import type { Employee, AttendanceLog } from '../types/attendance';
 
 interface KioskDB extends DBSchema {
   employees: {
@@ -24,7 +10,10 @@ interface KioskDB extends DBSchema {
   logs: {
     key: string;
     value: AttendanceLog;
-    indexes: { 'by-synced': number };
+    indexes: {
+      'by-synced': number;
+      'employeeId': string;
+    };
   };
 }
 
@@ -37,6 +26,7 @@ export const dbPromise = openDB<KioskDB>('KioskDatabase', 1, {
     if (!db.objectStoreNames.contains('logs')) {
       const logStore = db.createObjectStore('logs', { keyPath: 'id' });
       logStore.createIndex('by-synced', 'synced');
+      logStore.createIndex('employeeId', 'employeeId');
     }
   },
 });

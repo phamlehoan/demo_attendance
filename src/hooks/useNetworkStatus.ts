@@ -69,46 +69,48 @@ export const useNetworkStatus = () => {
   const syncEverything = useCallback(async (forceUpdateEmployees = false) => {
     if (syncLock.current) return;
 
-    // BƯỚC QUAN TRỌNG: Phải có kết nối thật mới cho hiện Loading và chạy API Sync
+    // 1. Kiểm tra mạng thực tế trước khi hiện Loading
     const isReallyOnline = await pingServer();
-    if (!isReallyOnline) {
-      console.warn("Hủy Sync: Không có mạng internet thực tế.");
-      return;
-    }
+    if (!isReallyOnline) return;
 
     const db = await dbPromise;
+    
+    // Kiểm tra dữ liệu hiện tại
     const unsynced = await db.getAllFromIndex('logs', 'by-synced', 0);
     const empsInDB = await db.getAll('employees');
 
+    // Nếu không có log để sync VÀ đã có nhân viên VÀ không yêu cầu force update -> Thoát
     if (unsynced.length === 0 && empsInDB.length > 0 && !forceUpdateEmployees) return;
 
     syncLock.current = true;
     setIsSyncing(true);
 
     try {
-      // 1. Đồng bộ nhân viên nếu cần
+      // 2. Đồng bộ nhân viên (Chạy khi DB trống HOẶC khi forceUpdateEmployees = true)
       if (empsInDB.length === 0 || forceUpdateEmployees) {
         const employees = await mockApi.fetchEmployees();
         const tx = db.transaction('employees', 'readwrite');
         await tx.store.clear();
         for (const e of employees) await tx.store.put(e);
         await tx.done;
+        console.log("Employees updated successfully.");
       }
 
-      // 2. Đồng bộ Log chấm công
+      // 3. Đồng bộ Log chấm công
       if (unsynced.length > 0) {
         const res = await mockApi.syncLogs(unsynced);
         if (res.success) {
           const tx = db.transaction('logs', 'readwrite');
+          const now = Date.now();
           for (const log of unsynced) {
-            await tx.store.put({ ...log, synced: 1 });
+            // Cập nhật trạng thái và thời điểm sync thành công
+            await tx.store.put({ ...log, synced: 1, syncedAt: now });
           }
           await tx.done;
         }
       }
     } catch (e) {
       console.error("Sync Error:", e);
-      setOnline(false); // Gặp lỗi khi đang gọi API -> Coi như mạng đứt
     } finally {
       setIsSyncing(false);
       syncLock.current = false;

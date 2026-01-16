@@ -1,4 +1,5 @@
-import type { Employee, AttendanceLog } from './services/db';
+import type { AttendanceLog, Employee } from "./types/attendance";
+
 
 // Dữ liệu mẫu khớp với cấu trúc trong IndexedDB
 const MOCK_EMPLOYEES: Employee[] = [

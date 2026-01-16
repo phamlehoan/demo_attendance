@@ -203,4 +203,18 @@
   .btn-back { background: none; border: none; color: #555; margin-top: 20px; cursor: pointer; &:hover { color: #888; } }
 }
 
+.btn-ok {
+  background: #007bff;
+  border-color: #007bff;
+  font-size: 1.2rem;
+  
+  &:disabled {
+    background: #1a1a1a !important;
+    border-color: #333 !important;
+    color: #444 !important;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
 @keyframes spin { to { transform: rotate(360deg); } }

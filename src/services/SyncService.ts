@@ -1,5 +1,6 @@
-import { dbPromise, type AttendanceLog } from './db';
 import { apiClient } from '../queries/apiClient';
+import type { AttendanceLog } from '../types/attendance';
+import { dbPromise } from './db';
 
 export const SyncService = {
   syncLogs: async () => {

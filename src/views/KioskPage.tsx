@@ -4,9 +4,9 @@ import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { useAttendanceLogic } from '../hooks/useAttendanceLogic';
 import { CameraModal } from '../components';
 import { attendanceQueries } from '../queries/attendanceQueries';
-import { type AttendanceDisplayLog } from '../types/attendance';
 import { FiLogIn, FiLogOut, FiCamera, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi';
 import './KioskPage.scss';
+import type { AttendanceDisplayLog } from '../types/attendance';
 
 export const KioskPage = () => {
   const queryClient = useQueryClient();
@@ -21,17 +21,19 @@ export const KioskPage = () => {
     handleConfirmAttendance, setShowCamera, setPin, setActionType 
   } = useAttendanceLogic();
 
-  // Sử dụng Query tập trung với Type-safe
   const { data: history = [] } = useQuery(attendanceQueries.getHistory);
 
+  // Tự động dọn dẹp mỗi khi đồng bộ xong
   useEffect(() => {
     if (!isSyncing) {
-      queryClient.invalidateQueries({ queryKey: ['ATTENDANCE_LOGS'] });
+      attendanceQueries.cleanupOldLogs().then(() => {
+        queryClient.invalidateQueries({ queryKey: ['ATTENDANCE_LOGS'] });
+      });
     }
   }, [isSyncing, queryClient]);
 
   const handleOkClick = async () => {
-    if (pin.length < 4) return;
+    if (pin.length < 6) return; // CHẶN NẾU DƯỚI 6 KÝ TỰ
     const isSuccess = await handleVerify(); 
     if (isSuccess) {
       setShowConfirmModal(true);
@@ -45,7 +47,7 @@ export const KioskPage = () => {
         <div className="sync-overlay-full">
           <div className="sync-card">
             <div className="spinner-large"></div>
-            <h2>Đang đồng bộ dữ liệu...</h2>
+            <h2>Synchronizing...</h2>
           </div>
         </div>
       )}
@@ -53,16 +55,15 @@ export const KioskPage = () => {
       <header className="kiosk-header">
         <div className="network-info">
           {!online ? (
-            <span className="status-label offline">○ Ngoại tuyến</span>
+            <span className="status-label offline">○ Offline</span>
           ) : (
-            // Kiểm tra RTT để quyết định màu sắc và nội dung label
             <span className={`status-label ${(rtt ?? 0) > 500 ? 'weak' : 'online'}`}>
-              {(rtt ?? 0) > 500 ? '⚠️ Mạng yếu' : '● Trực tuyến'} 
+              {(rtt ?? 0) > 500 ? '⚠️ Weak Connection' : '● Online'} 
               {rtt !== null && ` (${rtt}ms)`}
             </span>
           )}
         </div>
-        <button className="log-trigger" onClick={() => setShowLogs(true)}>📋 Lịch sử chấm công</button>
+        <button className="log-trigger" onClick={() => setShowLogs(true)}>📋 Attendance History</button>
       </header>
 
       <main className="kiosk-main">
@@ -86,6 +87,8 @@ export const KioskPage = () => {
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, 'OK'].map(k => (
               <button 
                 key={k} 
+                // ENABLE NÚT OK CHỈ KHI ĐỦ 6 SỐ
+                disabled={k === 'OK' && pin.length < 6}
                 className={`num-btn ${k === 'OK' ? 'btn-ok' : ''} ${k === 'C' ? 'btn-clear' : ''}`} 
                 onClick={() => {
                   if (k === 'C') setPin('');
@@ -100,13 +103,12 @@ export const KioskPage = () => {
         </div>
       </main>
 
-      {/* CONFIRM MODAL */}
       {showConfirmModal && currentEmp && (
         <div className="modal-overlay">
           <div className="modal-content confirm-modal">
             <div className="user-info">
-              <h2>Xin chào, {currentEmp.fullName}</h2>
-              <p>{new Date().toLocaleDateString('vi-VN')} | {new Date().toLocaleTimeString('vi-VN')}</p>
+              <h2>Welcome, {currentEmp.fullName}</h2>
+              <p>{new Date().toLocaleDateString()} | {new Date().toLocaleTimeString()}</p>
             </div>
             <div className="type-selector">
               <button className={`type-btn in ${actionType === 'IN' ? 'selected' : ''}`} onClick={() => setActionType('IN')}>
@@ -116,55 +118,52 @@ export const KioskPage = () => {
                 <FiLogOut /> Clock Out
               </button>
             </div>
-            <button className="btn-record" onClick={() => { setShowConfirmModal(false); setShowCamera(true); }}>
-              <FiCamera /> Record Your Attendance with Photo
+            <button 
+              className="btn-record" 
+              disabled={!actionType}
+              onClick={() => { setShowConfirmModal(false); setShowCamera(true); }}
+            >
+              <FiCamera /> Confirm & Take Photo
             </button>
             <button className="btn-back" onClick={() => setShowConfirmModal(false)}> <FiArrowLeft /> Back </button>
           </div>
         </div>
       )}
 
-      {/* CAMERA MODAL */}
       {showCamera && (
         <CameraModal 
           isOpen={showCamera}
           empName={currentEmp?.fullName || ''}
           onConfirm={async (photo) => {
-            const currentTime = getMonotonicTime();
-            await handleConfirmAttendance(photo, currentTime);
+            await handleConfirmAttendance(photo, getMonotonicTime());
             syncEverything();
+            setPin(''); // Reset sau khi xong
           }}
           onCancel={() => setShowCamera(false)}
         />
       )}
 
-      {/* LOGS MODAL */}
       {showLogs && (
         <div className="modal-overlay" onClick={() => setShowLogs(false)}>
           <div className="modal-content log-modal" onClick={e => e.stopPropagation()}>
              <div className="modal-header">
-               <h3>Lịch sử chấm công</h3>
+               <h3>Attendance History</h3>
                <button className="close-btn" onClick={() => setShowLogs(false)}>✕</button>
              </div>
              <div className="modal-body scrollable-area">
                <table className="log-table">
                  <thead>
-                   <tr>
-                     <th>Nhân viên</th>
-                     <th>Loại</th>
-                     <th>Thời gian</th>
-                     <th>Ảnh</th>
-                     <th>Sync</th>
-                   </tr>
+                   <tr><th>Employee</th><th>Type</th><th>Time</th><th>Photo</th><th>Status</th><th>Sync At</th></tr>
                  </thead>
                  <tbody>
                    {history.map((h: AttendanceDisplayLog) => (
                      <tr key={h.id || h.timestamp}>
                        <td className="emp-name-cell">{h.empName}</td>
                        <td><span className={`badge ${h.type}`}>{h.type}</span></td>
-                       <td className="time-cell">{new Date(h.timestamp).toLocaleTimeString('vi-VN')}</td>
+                       <td className="time-cell">{new Date(h.timestamp).toLocaleTimeString()}</td>
                        <td>{h.photo && <img src={h.photo} className="log-thumb" alt="Log" />}</td>
-                       <td className="sync-status">{h.synced === 1 ? '✅' : '⏳'}</td>
+                       <td className="sync-status">{h.synced === 1 ? '✅ Synced' : '⏳ Pending'}</td>
+                       <td className="sync-status">{h.syncedAt ? new Date(h.syncedAt).toLocaleTimeString() :  '--'}</td>
                      </tr>
                    ))}
                  </tbody>

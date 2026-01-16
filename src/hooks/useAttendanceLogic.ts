@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import { useQueryClient } from '@tanstack/react-query';
-import { dbPromise, type Employee, type AttendanceLog } from '../services/db';
+import { dbPromise } from '../services/db';
+import type { AttendanceLog, Employee } from '../types/attendance';
 
 export const useAttendanceLogic = () => {
   const [pin, setPin] = useState('');

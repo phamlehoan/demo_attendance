@@ -13,6 +13,7 @@ export interface AttendanceLog {
   type: ActionType;
   photo: string;
   synced: 0 | 1;
+  syncedAt?: number;
 }
 
 export interface AttendanceDisplayLog extends AttendanceLog {
