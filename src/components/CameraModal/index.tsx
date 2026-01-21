@@ -2,41 +2,19 @@ import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Box, Button, Typography, Stack } from '@mui/material';
 import './styles.scss';
-
-interface CameraModalProps {
-  isOpen: boolean;
-  empName: string;
-  onConfirm: (photoBase64: string) => void;
-  onCancel: () => void;
-}
+import type { CameraModalProps } from '../../types';
 
 export const CameraModal = ({ isOpen, empName, onConfirm, onCancel }: CameraModalProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    // 1. Tạo biến cục bộ để giữ tham chiếu của ref tại thời điểm effect chạy
-    const currentVideoRef = videoRef.current;
-
+    let stream: MediaStream | null = null;
     if (isOpen) {
       navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
-        .then(stream => {
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        })
-        .catch(err => console.error("Camera error:", err));
+        .then(s => { stream = s; if (videoRef.current) videoRef.current.srcObject = s; });
     }
-
-    // 2. Hàm cleanup sử dụng biến cục bộ thay vì videoRef.current
-    return () => {
-      if (currentVideoRef && currentVideoRef.srcObject) {
-        const stream = currentVideoRef.srcObject as MediaStream;
-        const tracks = stream.getTracks();
-        tracks.forEach(track => track.stop());
-        currentVideoRef.srcObject = null;
-      }
-    };
-  }, [isOpen]); // Effect chạy lại mỗi khi isOpen thay đổi
+    return () => stream?.getTracks().forEach(t => t.stop());
+  }, [isOpen]);
 
   const handleCapture = () => {
     const canvas = document.createElement("canvas");
@@ -54,10 +32,7 @@ export const CameraModal = ({ isOpen, empName, onConfirm, onCancel }: CameraModa
     <AnimatePresence>
       {isOpen && (
         <Box className="camera-modal-overlay">
-          <motion.div 
-            initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-            className="modal-body"
-          >
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="modal-body">
             <div className="video-container">
               <video ref={videoRef} autoPlay playsInline />
               <div className="scan-line" />

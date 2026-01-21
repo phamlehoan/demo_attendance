@@ -38,6 +38,9 @@ importers:
       dayjs:
         specifier: ^1.11.19
         version: 1.11.19
+      dexie:
+        specifier: ^4.2.1
+        version: 4.2.1
       framer-motion:
         specifier: ^12.26.2
         version: 12.26.2(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -67,7 +70,7 @@ importers:
         specifier: ^9.39.1
         version: 9.39.2
       '@types/node':
-        specifier: ^24.10.1
+        specifier: ^24.10.8
         version: 24.10.8
       '@types/react':
         specifier: ^19.2.5
@@ -1649,6 +1652,9 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  dexie@4.2.1:
+    resolution: {integrity: sha512-Ckej0NS6jxQ4Po3OrSQBFddayRhTCic2DoCAG5zacOfOVB9P2Q5Xc5uL/nVa7ZVs+HdMnvUPzLFCB/JwpB6Csg==}
 
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
@@ -4566,6 +4572,8 @@ snapshots:
 
   detect-libc@2.1.2:
     optional: true
+
+  dexie@4.2.1: {}
 
   dom-helpers@5.2.1:
     dependencies:

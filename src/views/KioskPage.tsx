@@ -1,39 +1,79 @@
+import dayjs from 'dayjs';
 import { useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { useSelector } from 'react-redux';
+import type { RootState } from '../store';
 import { useAttendanceLogic } from '../hooks/useAttendanceLogic';
-import { CameraModal } from '../components';
-import { attendanceQueries } from '../queries/attendanceQueries';
+import { useSyncAttendance } from '../queries/useSyncAttendance';
+import { db } from '../db/db';
+import { CameraModal } from '../components/CameraModal';
 import { FiLogIn, FiLogOut, FiCamera, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi';
 import './KioskPage.scss';
-import type { AttendanceDisplayLog } from '../types/attendance';
+import { TkEmployeeAttendanceType } from '../types';
+import { TimeService } from '../services';
 
 export const KioskPage = () => {
   const queryClient = useQueryClient();
+  
+  // UI States
   const [showLogs, setShowLogs] = useState<boolean>(false);
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [isPinVisible, setIsPinVisible] = useState<boolean>(false);
+  const [tick, setTick] = useState<number | null>(null);
 
-  const { online, rtt, isSyncing, getMonotonicTime, syncEverything } = useNetworkStatus();
+  // Redux & Logic hooks
+  // Note: Added rtt from kiosk state
+  const { online, offset, rtt } = useSelector((state: RootState) => state.kiosk);
+  const [currentTime, setCurrentTime] = useState(TimeService.getCurrent());
+
+  // Hiệu ứng chạy đồng hồ mỗi giây
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(TimeService.getCurrent());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [offset]);
+
+  // Restore Synchronization logic
+  const { mutate: syncNow, isPending: isSyncing } = useSyncAttendance();
+
   const { 
-    pin, showCamera, currentEmp, actionType,
-    handleNumberClick, handleVerify, 
-    handleConfirmAttendance, setShowCamera, setPin, setActionType 
+    pin, setPin, showCamera, setShowCamera, 
+    currentEmp, actionType, setActionType, 
+    handleNumberClick, handleVerify, handleConfirmAttendance 
   } = useAttendanceLogic();
 
-  const { data: history = [] } = useQuery(attendanceQueries.getHistory);
+  // History query
+  const { data: history = [] } = useQuery({
+    queryKey: ['ATTENDANCE_LOGS'],
+    queryFn: () => db.attendances.orderBy('id').reverse().limit(50).toArray()
+  });
 
-  // Tự động dọn dẹp mỗi khi đồng bộ xong
+  // Time management
   useEffect(() => {
-    if (!isSyncing) {
-      attendanceQueries.cleanupOldLogs().then(() => {
-        queryClient.invalidateQueries({ queryKey: ['ATTENDANCE_LOGS'] });
-      });
+    let timer: ReturnType<typeof setInterval>;
+    if (showConfirmModal) {
+      const update = () => setTick(new Date().getTime());
+      update();
+      timer = setInterval(update, 1000);
     }
-  }, [isSyncing, queryClient]);
+    return () => {
+      if (timer) clearInterval(timer);
+      setTick(null);
+    };
+  }, [showConfirmModal]);
+
+  const displayTimeFormatted = tick !== null 
+    ? new Date(tick + offset).toLocaleString('en-US') 
+    : "";
+
+  // Auto-sync when online status changes to true
+  useEffect(() => { 
+    if (online) syncNow(); 
+  }, [online, syncNow]);
 
   const handleOkClick = async () => {
-    if (pin.length < 6) return; // CHẶN NẾU DƯỚI 6 KÝ TỰ
+    if (pin.length < 6) return;
     const isSuccess = await handleVerify(); 
     if (isSuccess) {
       setShowConfirmModal(true);
@@ -43,6 +83,7 @@ export const KioskPage = () => {
 
   return (
     <div className="app-viewport dark">
+      {/* RESTORED: Full-screen Syncing Overlay */}
       {isSyncing && (
         <div className="sync-overlay-full">
           <div className="sync-card">
@@ -53,6 +94,7 @@ export const KioskPage = () => {
       )}
 
       <header className="kiosk-header">
+        {/* RESTORED: Detailed Network Status Logic */}
         <div className="network-info">
           {!online ? (
             <span className="status-label offline">○ Offline</span>
@@ -63,7 +105,20 @@ export const KioskPage = () => {
             </span>
           )}
         </div>
-        <button className="log-trigger" onClick={() => setShowLogs(true)}>📋 Attendance History</button>
+
+        {/* CHÍNH GIỮA: Server Clock */}
+        <div className="server-clock-center">
+          <div className="time">
+            {dayjs(currentTime).format('HH:mm:ss')}
+          </div>
+          <div className="date">
+            {dayjs(currentTime).format('ddd, DD/MM/YYYY')}
+          </div>
+        </div>
+
+        <button className="log-trigger" onClick={() => setShowLogs(true)}>
+          📋 Attendance History
+        </button>
       </header>
 
       <main className="kiosk-main">
@@ -87,12 +142,11 @@ export const KioskPage = () => {
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, 'OK'].map(k => (
               <button 
                 key={k} 
-                // ENABLE NÚT OK CHỈ KHI ĐỦ 6 SỐ
                 disabled={k === 'OK' && pin.length < 6}
                 className={`num-btn ${k === 'OK' ? 'btn-ok' : ''} ${k === 'C' ? 'btn-clear' : ''}`} 
-                onClick={() => {
+                onClick={async () => {
                   if (k === 'C') setPin('');
-                  else if (k === 'OK') handleOkClick();
+                  else if (k === 'OK') await handleOkClick();
                   else handleNumberClick(k.toString());
                 }}
               >
@@ -103,19 +157,20 @@ export const KioskPage = () => {
         </div>
       </main>
 
+      {/* Confirmation Modal */}
       {showConfirmModal && currentEmp && (
         <div className="modal-overlay">
           <div className="modal-content confirm-modal">
             <div className="user-info">
               <h2>Welcome, {currentEmp.fullName}</h2>
-              <p>{new Date().toLocaleDateString()} | {new Date().toLocaleTimeString()}</p>
+              <p className="current-time">{displayTimeFormatted}</p>
             </div>
             <div className="type-selector">
-              <button className={`type-btn in ${actionType === 'IN' ? 'selected' : ''}`} onClick={() => setActionType('IN')}>
-                <FiLogIn /> Clock In
+              <button className={`type-btn in ${actionType === TkEmployeeAttendanceType.CHECK_IN ? 'selected' : ''}`} onClick={() => setActionType(TkEmployeeAttendanceType.CHECK_IN)}>
+                <FiLogIn /> CLOCK IN
               </button>
-              <button className={`type-btn out ${actionType === 'OUT' ? 'selected' : ''}`} onClick={() => setActionType('OUT')}>
-                <FiLogOut /> Clock Out
+              <button className={`type-btn out ${actionType === TkEmployeeAttendanceType.CHECK_OUT ? 'selected' : ''}`} onClick={() => setActionType(TkEmployeeAttendanceType.CHECK_OUT)}>
+                <FiLogOut /> CLOCK OUT
               </button>
             </div>
             <button 
@@ -123,26 +178,31 @@ export const KioskPage = () => {
               disabled={!actionType}
               onClick={() => { setShowConfirmModal(false); setShowCamera(true); }}
             >
-              <FiCamera /> Confirm & Take Photo
+              <FiCamera /> TAKE PHOTO
             </button>
-            <button className="btn-back" onClick={() => setShowConfirmModal(false)}> <FiArrowLeft /> Back </button>
+            <button className="btn-back" onClick={() => setShowConfirmModal(false)}>
+              <FiArrowLeft /> BACK
+            </button>
           </div>
         </div>
       )}
 
+      {/* Camera Modal */}
       {showCamera && (
         <CameraModal 
           isOpen={showCamera}
           empName={currentEmp?.fullName || ''}
-          onConfirm={async (photo) => {
-            await handleConfirmAttendance(photo, getMonotonicTime());
-            syncEverything();
-            setPin(''); // Reset sau khi xong
+          onConfirm={async (photo: string) => {
+            await handleConfirmAttendance(photo);
+            // Trigger sync immediately after attendance is recorded
+            syncNow();
+            queryClient.invalidateQueries({ queryKey: ['ATTENDANCE_LOGS'] });
           }}
           onCancel={() => setShowCamera(false)}
         />
       )}
 
+      {/* History Modal */}
       {showLogs && (
         <div className="modal-overlay" onClick={() => setShowLogs(false)}>
           <div className="modal-content log-modal" onClick={e => e.stopPropagation()}>
@@ -153,17 +213,30 @@ export const KioskPage = () => {
              <div className="modal-body scrollable-area">
                <table className="log-table">
                  <thead>
-                   <tr><th>Employee</th><th>Type</th><th>Time</th><th>Photo</th><th>Status</th><th>Sync At</th></tr>
+                   <tr>
+                     <th>Employee</th>
+                     <th>Type</th>
+                     <th>Time</th>
+                     <th>Photo</th>
+                     <th>Status</th>
+                     <th>Sync At</th>
+                   </tr>
                  </thead>
                  <tbody>
-                   {history.map((h: AttendanceDisplayLog) => (
-                     <tr key={h.id || h.timestamp}>
-                       <td className="emp-name-cell">{h.empName}</td>
+                   {history.map((h) => (
+                     <tr key={h.id}>
+                       <td>{h.pin}</td> 
                        <td><span className={`badge ${h.type}`}>{h.type}</span></td>
-                       <td className="time-cell">{new Date(h.timestamp).toLocaleTimeString()}</td>
-                       <td>{h.photo && <img src={h.photo} className="log-thumb" alt="Log" />}</td>
-                       <td className="sync-status">{h.synced === 1 ? '✅ Synced' : '⏳ Pending'}</td>
-                       <td className="sync-status">{h.syncedAt ? new Date(h.syncedAt).toLocaleTimeString() :  '--'}</td>
+                       <td>{new Date(h.checkedTime).toLocaleTimeString('en-US')}</td>
+                       <td>
+                        {h.imageCapture && (
+                          <img src={h.imageCapture} alt="capture" className="log-thumb" width="40" />
+                        )}
+                       </td>
+                       <td>{h.synced === 1 ? '✅ Synced' : '⏳ Pending'}</td>
+                       <td>
+                        {h.syncedAt ? new Date(h.syncedAt).toLocaleString('en-US') : '-'}
+                       </td>
                      </tr>
                    ))}
                  </tbody>
