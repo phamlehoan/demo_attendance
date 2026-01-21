@@ -7,7 +7,7 @@ import { useAttendanceLogic } from '../hooks/useAttendanceLogic';
 import { useSyncAttendance } from '../queries/useSyncAttendance';
 import { db } from '../db/db';
 import { CameraModal } from '../components/CameraModal';
-import { FiLogIn, FiLogOut, FiCamera, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiClock, FiLogIn, FiLogOut, FiCamera, FiArrowLeft, FiEye, FiEyeOff } from 'react-icons/fi';
 import './KioskPage.scss';
 import { TkEmployeeAttendanceType } from '../types';
 import { TimeService } from '../services';
@@ -22,11 +22,10 @@ export const KioskPage = () => {
   const [tick, setTick] = useState<number | null>(null);
 
   // Redux & Logic hooks
-  // Note: Added rtt from kiosk state
   const { online, offset, rtt } = useSelector((state: RootState) => state.kiosk);
   const [currentTime, setCurrentTime] = useState(TimeService.getCurrent());
 
-  // Hiệu ứng chạy đồng hồ mỗi giây
+  // Hiệu ứng chạy đồng hồ Header mỗi giây
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(TimeService.getCurrent());
@@ -34,7 +33,7 @@ export const KioskPage = () => {
     return () => clearInterval(timer);
   }, [offset]);
 
-  // Restore Synchronization logic
+  // Sync logic
   const { mutate: syncNow, isPending: isSyncing } = useSyncAttendance();
 
   const { 
@@ -49,33 +48,23 @@ export const KioskPage = () => {
     queryFn: () => db.attendances.orderBy('id').reverse().limit(50).toArray()
   });
 
-  // Time management
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    if (showConfirmModal) {
-      const update = () => setTick(new Date().getTime());
-      update();
-      timer = setInterval(update, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-      setTick(null);
-    };
-  }, [showConfirmModal]);
-
+  // Format thời gian hiển thị trong Modal xác nhận bằng dayjs
   const displayTimeFormatted = tick !== null 
-    ? new Date(tick + offset).toLocaleString('en-US') 
+    ? dayjs(tick).format('HH:mm:ss - DD/MM/YYYY') 
     : "";
 
-  // Auto-sync when online status changes to true
+  // Auto-sync khi có mạng
   useEffect(() => { 
     if (online) syncNow(); 
   }, [online, syncNow]);
 
   const handleOkClick = async () => {
-    if (pin.length < 6) return;
+  if (pin.length < 6) return;
+
     const isSuccess = await handleVerify(); 
     if (isSuccess) {
+      // CHỐT GIỜ: Lấy giờ server ngay thời điểm xác thực PIN thành công
+      setTick(TimeService.getCurrent()); 
       setShowConfirmModal(true);
       setIsPinVisible(false);
     }
@@ -83,7 +72,6 @@ export const KioskPage = () => {
 
   return (
     <div className="app-viewport dark">
-      {/* RESTORED: Full-screen Syncing Overlay */}
       {isSyncing && (
         <div className="sync-overlay-full">
           <div className="sync-card">
@@ -94,7 +82,6 @@ export const KioskPage = () => {
       )}
 
       <header className="kiosk-header">
-        {/* RESTORED: Detailed Network Status Logic */}
         <div className="network-info">
           {!online ? (
             <span className="status-label offline">○ Offline</span>
@@ -106,16 +93,6 @@ export const KioskPage = () => {
           )}
         </div>
 
-        {/* CHÍNH GIỮA: Server Clock */}
-        <div className="server-clock-center">
-          <div className="time">
-            {dayjs(currentTime).format('HH:mm:ss')}
-          </div>
-          <div className="date">
-            {dayjs(currentTime).format('ddd, DD/MM/YYYY')}
-          </div>
-        </div>
-
         <button className="log-trigger" onClick={() => setShowLogs(true)}>
           📋 Attendance History
         </button>
@@ -123,6 +100,15 @@ export const KioskPage = () => {
 
       <main className="kiosk-main">
         <div className="kiosk-card">
+          
+          <div className="server-clock-center">
+            <div className="time">
+              <FiClock style={{ marginRight: '8px', fontSize: '1.4rem', verticalAlign: 'middle' }} />
+              {/* format 'hh:mm:ss A' sẽ ra dạng 07:05:02 PM */}
+              {dayjs(currentTime).format('hh:mm:ss A')}
+            </div>
+          </div>
+
           <div className="display-area">
             <div className="pin-display-wrapper">
               <div className="pin-dots">
@@ -187,14 +173,12 @@ export const KioskPage = () => {
         </div>
       )}
 
-      {/* Camera Modal */}
       {showCamera && (
         <CameraModal 
           isOpen={showCamera}
           empName={currentEmp?.fullName || ''}
           onConfirm={async (photo: string) => {
             await handleConfirmAttendance(photo);
-            // Trigger sync immediately after attendance is recorded
             syncNow();
             queryClient.invalidateQueries({ queryKey: ['ATTENDANCE_LOGS'] });
           }}
@@ -202,7 +186,7 @@ export const KioskPage = () => {
         />
       )}
 
-      {/* History Modal */}
+      {/* History Modal - Refactored with Dayjs */}
       {showLogs && (
         <div className="modal-overlay" onClick={() => setShowLogs(false)}>
           <div className="modal-content log-modal" onClick={e => e.stopPropagation()}>
@@ -227,7 +211,8 @@ export const KioskPage = () => {
                      <tr key={h.id}>
                        <td>{h.pin}</td> 
                        <td><span className={`badge ${h.type}`}>{h.type}</span></td>
-                       <td>{new Date(h.checkedTime).toLocaleTimeString('en-US')}</td>
+                       {/* Format Time History */}
+                       <td>{dayjs(h.checkedTime).format('HH:mm:ss')}</td>
                        <td>
                         {h.imageCapture && (
                           <img src={h.imageCapture} alt="capture" className="log-thumb" width="40" />
@@ -235,7 +220,8 @@ export const KioskPage = () => {
                        </td>
                        <td>{h.synced === 1 ? '✅ Synced' : '⏳ Pending'}</td>
                        <td>
-                        {h.syncedAt ? new Date(h.syncedAt).toLocaleString('en-US') : '-'}
+                        {/* Format Sync At */}
+                        {h.syncedAt ? dayjs(h.syncedAt).format('HH:mm DD/MM') : '-'}
                        </td>
                      </tr>
                    ))}

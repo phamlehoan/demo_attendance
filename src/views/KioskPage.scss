@@ -20,26 +20,6 @@
   align-items: center;
   box-sizing: border-box;
   z-index: 10;
-
-  .server-clock-center {
-    text-align: center;
-    pointer-events: none; // Không cản trở click vào các vùng khác
-
-    .time {
-      font-size: 1.8rem;
-      font-weight: 700;
-      font-family: 'Monaco', 'Courier New', monospace;
-      color: #00ff88; // Màu xanh neon nhẹ giúp dễ nhìn
-      line-height: 1;
-    }
-
-    .date {
-      font-size: 0.85rem;
-      opacity: 0.7;
-      text-transform: uppercase;
-      margin-top: 4px;
-    }
-  }
 }
 
 .status-label {
@@ -236,5 +216,25 @@
     opacity: 0.6;
   }
 }
+
+.server-clock-center {
+    text-align: center;
+    pointer-events: none; // Không cản trở click vào các vùng khác
+
+    .time {
+      font-size: 1.8rem;
+      font-weight: 700;
+      font-family: 'Monaco', 'Courier New', monospace;
+      color: #00ff88; // Màu xanh neon nhẹ giúp dễ nhìn
+      line-height: 1;
+    }
+
+    .date {
+      font-size: 0.85rem;
+      opacity: 0.7;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+  }
 
 @keyframes spin { to { transform: rotate(360deg); } }

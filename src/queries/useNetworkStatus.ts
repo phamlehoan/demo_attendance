@@ -3,6 +3,8 @@ import { useDispatch } from 'react-redux';
 import { setNetworkInfo } from '../store';
 import { responseWrapper, type ApiResponseType } from './helpers';
 import api, { API_CONFIG } from '../services/api';
+import type { AxiosRequestConfig } from 'axios';
+import dayjs from 'dayjs';
 
 interface TimeAnchor { serverT: number; perfT: number; }
 
@@ -10,83 +12,84 @@ export const useNetworkStatus = () => {
   const dispatch = useDispatch();
   const timeAnchor = useRef<TimeAnchor | null>(null);
 
-  const pingServer = useCallback(async () => {
-    const pStart = performance.now();
+  const updateNetworkState = useCallback((srvTimeMs: number, rtt: number, pEnd: number) => {
+    const correctedServerTime = srvTimeMs + rtt / 2;
+    timeAnchor.current = { serverT: correctedServerTime, perfT: pEnd };
+    const newOffset = correctedServerTime - Date.now();
     
+    localStorage.setItem('server_time_offset', newOffset.toString());
+    dispatch(setNetworkInfo({ online: true, offset: newOffset, rtt }));
+  }, [dispatch]);
+
+  const handleOffline = useCallback(() => {
+    const savedOffset = Number(localStorage.getItem('server_time_offset')) || 0;
+    dispatch(setNetworkInfo({ online: false, offset: savedOffset, rtt: null }));
+  }, [dispatch]);
+
+  const pingServer = useCallback(async (): Promise<boolean> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const pStart = performance.now();
+
     try {
-      // --- CHẶNG 1: GỌI HEARTBEAT SERVER CHÍNH ---
-      const res = await responseWrapper<ApiResponseType<{ timestamp: number | string }>, [string, object]>(
-        api.get, 
-        [API_CONFIG.ENDPOINTS.HEARTBEAT, { _t: Date.now() }]
+      const res = await responseWrapper<
+        ApiResponseType<{ timestamp: number | string }>, 
+        [string, Record<string, unknown>, AxiosRequestConfig]
+      >(
+        api.get,
+        [API_CONFIG.ENDPOINTS.HEARTBEAT, { _t: Date.now() }, { signal: controller.signal }]
       );
 
       const pEnd = performance.now();
-      const measuredRtt = Math.round(pEnd - pStart);
-      
-      const srvTimeMs = typeof res.timestamp === 'string' 
-        ? new Date(res.timestamp).getTime() 
-        : res.timestamp;
+      const srvTimeMs = dayjs(res.timestamp).valueOf();
+      updateNetworkState(srvTimeMs, Math.round(pEnd - pStart), pEnd);
+      clearTimeout(timeoutId);
+      return true;
 
-      // Tính toán Anchor chính xác
-      const correctedServerTime = srvTimeMs + (measuredRtt / 2);
-      timeAnchor.current = { serverT: correctedServerTime, perfT: pEnd };
+    } catch (err: unknown) {
+      // Khử any: Kiểm tra nếu là lỗi timeout từ AbortController
+      const isAbort = err instanceof Error && err.name === 'AbortError';
+      const isTimeout = isAbort || (err as { problem?: string })?.problem === 'TIMEOUT_ERROR';
 
-      const newOffset = correctedServerTime - Date.now();
-      localStorage.setItem('server_time_offset', newOffset.toString());
-      
-      dispatch(setNetworkInfo({ online: true, offset: newOffset, rtt: measuredRtt }));
-
-    } catch {
-      // --- CHẶNG 2: FAILOVER SANG CLOUDFLARE (Dùng logic cũ của bạn) ---
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
         const cfStart = performance.now();
-
-        const uniqueId = Math.random().toString(36).substring(7);
-        // Dùng fetch trực tiếp để tránh qua middleware của apisauce/helpers
-        const res = await fetch(`https://www.cloudflare.com/cdn-cgi/trace?cb=${uniqueId}`, {
-          method: 'GET',
-          mode: 'cors',
+        const cfRes = await fetch(`https://www.cloudflare.com/cdn-cgi/trace?cb=${Math.random()}`, {
           signal: controller.signal,
           cache: 'no-store'
         });
 
-        clearTimeout(timeoutId);
-
-        if (res.ok) {
-          const text = await res.text();
+        if (cfRes.ok) {
+          const text = await cfRes.text();
           const pEnd = performance.now();
-          const measuredRtt = Math.floor(pEnd - cfStart);
-
           const tsLine = text.split('\n').find(l => l.startsWith('ts='));
           if (tsLine) {
             const srvTimeMs = parseFloat(tsLine.split('=')[1]) * 1000;
-            
-            // Anchor thời gian từ Cloudflare
-            const correctedCfTime = srvTimeMs + (measuredRtt / 2);
-            timeAnchor.current = { serverT: correctedCfTime, perfT: pEnd };
-            
-            const newOffset = correctedCfTime - Date.now();
-            localStorage.setItem('server_time_offset', newOffset.toString());
-
-            dispatch(setNetworkInfo({ online: true, offset: newOffset, rtt: measuredRtt }));
-            console.warn("Server Main Down. Failover to Cloudflare Time successful.");
-            return;
+            updateNetworkState(srvTimeMs, isTimeout ? 5001 : Math.floor(pEnd - cfStart), pEnd);
+            return true;
           }
         }
         throw new Error();
       } catch {
-        // --- CHẶNG 3: THỰC SỰ MẤT MẠNG ---
-        const savedOffset = Number(localStorage.getItem('server_time_offset')) || 0;
-        dispatch(setNetworkInfo({ online: false, offset: savedOffset, rtt: null }));
+        handleOffline();
+        return false;
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
-  }, [dispatch]);
+  }, [updateNetworkState, handleOffline]);
 
   useEffect(() => {
     pingServer();
     const interval = setInterval(pingServer, 15000);
-    return () => clearInterval(interval);
+    const handleStatus = () => pingServer();
+    window.addEventListener('online', handleStatus);
+    window.addEventListener('offline', handleStatus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleStatus);
+      window.removeEventListener('offline', handleStatus);
+    };
   }, [pingServer]);
+
+  return { pingServer, timeAnchor };
 };
