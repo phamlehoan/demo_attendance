@@ -1,0 +1,61 @@
+{
+  "success": true,
+  "data": [
+    {
+      "employeeId": "550e8400-e29b-41d4-a716-446655440000",
+      "pin": "123456",
+      "fullName": "Nguyễn Văn An",
+      "firstName": "An",
+      "middleName": "Văn",
+      "lastName": "Nguyễn",
+      "avatar": "https://i.pravatar.cc/150?u=550e8400"
+    },
+    {
+      "employeeId": "7d2f4a51-9b3c-4e8a-8c1d-1a2b3c4d5e6f",
+      "pin": "654321",
+      "fullName": "Trần Thị Bích Phượng",
+      "firstName": "Phượng",
+      "middleName": "Thị Bích",
+      "lastName": "Trần",
+      "avatar": "https://i.pravatar.cc/150?u=7d2f4a51"
+    },
+    {
+      "employeeId": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d",
+      "pin": "112233",
+      "fullName": "Lê Hoàng Nam",
+      "firstName": "Nam",
+      "middleName": "Hoàng",
+      "lastName": "Lê",
+      "avatar": ""
+    },
+    {
+      "employeeId": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "pin": "445566",
+      "fullName": "Phạm Minh Quang",
+      "firstName": "Quang",
+      "middleName": "Minh",
+      "lastName": "Phạm",
+      "avatar": "https://i.pravatar.cc/150?u=f47ac10b"
+    },
+    {
+      "employeeId": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "pin": "998877",
+      "fullName": "Đặng Thu Thảo",
+      "firstName": "Thảo",
+      "middleName": "Thu",
+      "lastName": "Đặng",
+      "avatar": "https://i.pravatar.cc/150?u=2b3c4d5e"
+    },
+    {
+      "employeeId": "c9a8b7d6-e5f4-4321-b1a2-c3d4e5f6g7h8",
+      "pin": "000000",
+      "fullName": "Admin Test User",
+      "firstName": "User",
+      "middleName": "Test",
+      "lastName": "Admin",
+      "avatar": "https://i.pravatar.cc/150?u=admin"
+    }
+  ],
+  "timestamp": 1737430000000,
+  "code": 200
+}

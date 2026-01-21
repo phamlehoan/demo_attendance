@@ -1,5 +1,7 @@
 import { toast } from 'react-toastify';
 import type { ApiResponse, ApiErrorResponse } from 'apisauce';
+import mockEmployees from '../mocks/employees.json';
+import mockAttendance from '../mocks/attendance.json';
 
 export interface ApiResponseType<T> {
   data: T;
@@ -8,44 +10,70 @@ export interface ApiResponseType<T> {
   timestamp: string;
 }
 
-export interface PaginationResponseType<T> {
-  data: T[];
-  payloadSize?: number;
-  hasNext?: boolean;
-  totalRecords?: number;
-}
-
-// Định nghĩa kiểu cho hàm API call (Zero Any)
 type ApiCallFunc<TArgs extends unknown[], TData> = (...args: TArgs) => Promise<ApiResponse<TData>>;
 
 /**
- * responseWrapper: Xử lý phản hồi và lỗi tập trung
+ * responseWrapper: Xử lý phản hồi, lỗi tập trung và Mock Fallback
  */
 export async function responseWrapper<TData, TArgs extends unknown[] = unknown[]>(
   func: ApiCallFunc<TArgs, TData>,
   args: TArgs = [] as unknown as TArgs
 ): Promise<TData> {
-  // Không dùng new Promise(async ...) để tránh lỗi "Promise executor should not be async"
-  const response = await func(...args);
+  try {
+    const response = await func(...args);
 
-  if (response.ok && response.data !== undefined) {
-    return response.data;
+    if (response.ok && response.data !== undefined) {
+      return response.data;
+    }
+
+    throw response;
+  } catch (error: unknown) {
+    const url = (args[0] as string) || '';
+
+    // 1. LOẠI TRỪ CLOUDFLARE & HEARTBEAT (KHÔNG MOCK)
+    // - Cloudflare: Dùng để check ổn định mạng theo repo cũ của bạn.
+    // - Heartbeat: Cần lỗi thật để useNetworkStatus tính toán offset từ LocalStorage.
+    if (
+      url.includes('cloudflare') || 
+      url.includes('1.1.1.1') || 
+      url.includes('/heartbeat') // Giả sử endpoint của bạn có chứa từ này
+    ) {
+      const apiError = error as ApiErrorResponse<TData>;
+      throw apiError.data || apiError.problem || apiError;
+    }
+
+    // 2. LOGIC MOCK FALLBACK CHO CÁC API DỮ LIỆU
+    if (url.includes('/employee-profiles')) {
+      console.warn(`[Mock] API Employee failed, using local data.`);
+      return mockEmployees as unknown as TData;
+    }
+
+    if (url.includes('/employee-attendances-batch')) {
+      console.warn(`[Mock] API Attendance failed, using local data.`);
+      return mockAttendance as unknown as TData;
+    }
+
+    // 3. XỬ LÝ LỖI TOAST (Chỉ hiện cho các thao tác người dùng, không hiện cho heartbeat ngầm)
+    const apiError = error as ApiErrorResponse<TData>;
+    
+    // Chỉ báo lỗi timeout cho các request không phải heartbeat/network check
+    const isBackgroundRequest = url.includes('/heartbeat') || url.includes('1.1.1.1');
+    
+    if (!isBackgroundRequest) {
+      if (
+        apiError.problem === 'TIMEOUT_ERROR' || 
+        apiError.originalError?.message === 'CONNECTION_TIMEOUT'
+      ) {
+        toast.error('Connection timeout. Please check your network and try again.');
+      }
+    }
+
+    if (apiError.data) {
+      throw apiError.data;
+    }
+    
+    throw new Error(apiError.problem || 'UNKNOWN_ERROR');
   }
-
-  // Ép kiểu lỗi để xử lý thông báo
-  const errorResponse = response as ApiErrorResponse<TData>;
-
-  if (
-    errorResponse.originalError?.message === 'CONNECTION_TIMEOUT' || 
-    errorResponse.problem === 'TIMEOUT_ERROR'
-  ) {
-    toast.error('Connection timeout. Please check your network and try again.');
-  }
-
-  // Throw lỗi để React Query (hoặc catch bên ngoài) xử lý
-  // Nếu server trả về object lỗi thì throw object đó, nếu không thì throw mã lỗi (problem)
-  throw errorResponse.data || errorResponse.problem;
 }
 
-// Helper bóc tách data
 export const getResponseData = <T>(obj: { data: T }): T => obj.data;
